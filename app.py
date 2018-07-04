@@ -7,7 +7,7 @@ from flask_script import Manager
 from flask_sqlalchemy import SQLAlchemy
 from flask_bootstrap import Bootstrap
 from flask_wtf import FlaskForm
-from wtforms import StringField, SubmitField
+from wtforms import StringField, SubmitField,FileField
 from wtforms.validators import DataRequired
 from flask_sqlalchemy import SQLAlchemy
 import os
@@ -19,6 +19,12 @@ class NameForm(FlaskForm):
     submit = SubmitField("Submit")
 
 
+class UploadForm(FlaskForm):
+    name = StringField('What is your name?', validators=[DataRequired()])
+    file = FileField("导入文件",validators=[DataRequired()])
+    submit = SubmitField("Submit")
+    submi1t = SubmitField("Submit")
+
 app = Flask(__name__)
 manager = Manager(app)
 bootstrap = Bootstrap(app)
@@ -28,8 +34,6 @@ app.config['SQLALCHEMY_DATABASE_URI']=\
 app.config['SQLALCHEMY_COMMIT_ON_TEARDOWN'] = True
 app.config["SQLALCHEMY_ECHO"] = True
 db = SQLAlchemy(app)
-
-
 
 
 
@@ -55,9 +59,27 @@ user_john = User(username='aaa')
 # user_tom = User(username='tom',role=admin_role)
 
 
+@app.route('/test', methods=["GET", "POST"])
+def test():
+    form = NameForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(username=form.name.data).first()
+        if user is  None:
+            user = User(username = form.name.data)
+            db.session.add(user)
+            session['known'] = False
+        else:
+            session['known'] = True
+        session['name'] = form.name.data
+        form.name.data = ''
+        return redirect(url_for('test'))
+        # form.name.data = ''
+    return render_template('test.html',form=form,name=session.get('name'),
+    known = session.get('known',False))
+
 @app.route('/', methods=["GET", "POST"])
 def index():
-    form = NameForm()
+    form = UploadForm()
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.name.data).first()
         if user is  None:
@@ -72,8 +94,6 @@ def index():
         # form.name.data = ''
     return render_template('index.html',form=form,name=session.get('name'),
     known = session.get('known',False))
-
-
 @app.route('/user/<name>', methods=["POST", "GET"])
 def user(name):
     # respon = make_response("<h3>哈哈</h3>")
