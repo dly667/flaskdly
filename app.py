@@ -1,3 +1,4 @@
+#__*__coding:utf-8__*__
 from flask import Flask, render_template
 from flask import request
 from flask import make_response
@@ -10,8 +11,9 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField,FileField
 from wtforms.validators import DataRequired
 from flask_sqlalchemy import SQLAlchemy
-import os
-
+import os, sys
+from werkzeug import secure_filename
+import math
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 class NameForm(FlaskForm):
@@ -23,7 +25,7 @@ class UploadForm(FlaskForm):
     name = StringField('What is your name?', validators=[DataRequired()])
     file = FileField("导入文件",validators=[DataRequired()])
     submit = SubmitField("Submit")
-    submi1t = SubmitField("Submit")
+   
 
 app = Flask(__name__)
 manager = Manager(app)
@@ -51,12 +53,16 @@ class User(db.Model):
     role_id = db.Column(db.Integer,db.ForeignKey('roles.id'))
     def __repr__(self):
         return '<User %r> % self.username'
-
+class PhoneList(db.Model):
+    __tablename__ = 'phonelist'
+    id = db.Column(db.Integer,primary_key=True)
+    filename = db.Column(db.String(64),index=True)
+    phonenumber = db.Column(db.Integer)
+    # 0表示未抓取，1表示已抓取但未注册，2表示已抓取并且已注册
+    status = db.Column(db.Integer)
+    def __repr__(self):
+        return '<User %r> % self.username'
 # db.create_all()
-print(User.__table__)
-# # admin_role = Role(name='Admin3')
-user_john = User(username='aaa')
-# user_tom = User(username='tom',role=admin_role)
 
 
 @app.route('/test', methods=["GET", "POST"])
@@ -79,21 +85,40 @@ def test():
 
 @app.route('/', methods=["GET", "POST"])
 def index():
+    if session.get('upload_status') == True:
+        session['upload_status'] = False
+    else:
+        session['upload_done'] = 0
     form = UploadForm()
     if form.validate_on_submit():
-        user = User.query.filter_by(username=form.name.data).first()
-        if user is  None:
-            user = User(username = form.name.data)
-            db.session.add(user)
-            session['known'] = False
-        else:
-            session['known'] = True
-        session['name'] = form.name.data
-        form.name.data = ''
+        filename = secure_filename(form.file.data.filename)
+        form.file.data.save('uploads/' + filename)
+        session['upload_status'] = True
+        session['upload_done'] = 1
+        
         return redirect(url_for('index'))
-        # form.name.data = ''
-    return render_template('index.html',form=form,name=session.get('name'),
-    known = session.get('known',False))
+    else:
+        filename = None
+    return render_template('index.html', form=form, filename=filename,upload_done = session.get('upload_done'))
+
+@app.route('/filelist/',methods=["POST","GET"])
+def filelist():
+    # 打开文件
+    path = basedir+'/uploads/'
+    dirs = os.listdir( path )
+    #页码
+    cur_p = request.args.get('p')
+   
+    # 输出所有文件和文件夹
+    # for file in dirs:
+    #     print(file)
+    
+    if cur_p == None:
+        dirs_temp = dirs[slice(1,10)]
+    else:
+        dirs_temp = dirs[slice((int(cur_p)-1)*10,(int(cur_p)-1)*10+10)]
+   
+    return render_template('filelist.html',dirs=dirs_temp,page=list(range(1,(math.ceil((len(dirs)/10+1)))))) 
 @app.route('/user/<name>', methods=["POST", "GET"])
 def user(name):
     # respon = make_response("<h3>哈哈</h3>")
