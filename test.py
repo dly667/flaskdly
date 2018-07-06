@@ -1,4 +1,5 @@
 import requests
+import json
 url = "https://i.gw.com.cn/UserCenter/page/account/register?source=1&redirect_uri="
 r = requests.get(url, verify=False)
 # r1 =  requests.post('https://i.gw.com.cn/UserCenter/page/account/register?source=1&redirect_uri=#')
@@ -32,7 +33,7 @@ data = {
     'mobile': '13777707654', 'upass': 'qqsd23323', 'verifyPattern': 'mobile', 'code': '123444', 'afs_scene': "common_h5"
 }
 url = "https://i.gw.com.cn/UserCenter/account/registerAuth"
-r = requests.post(url, data=data, cookies=cookies, headers=headers, verify=False)
+r = requests.post(url, data=json.dumps(data), cookies=cookies, headers=headers, verify=False)
 # r1 =  requests.post('https://i.gw.com.cn/UserCenter/page/account/register?source=1&redirect_uri=#')
 print(r.request.headers)
 print(r.text)
