@@ -119,6 +119,11 @@ def filelist():
         dirs_temp = dirs[slice((int(cur_p)-1)*10,(int(cur_p)-1)*10+10)]
    
     return render_template('filelist.html',dirs=dirs_temp,page=list(range(1,(math.ceil((len(dirs)/10+1)))))) 
+
+@app.route('/filedetail/<filename>',methods=["POST","GET"])
+def filedetail(filename):
+
+    return render_template('filedetail.html',filename=filename)
 @app.route('/user/<name>', methods=["POST", "GET"])
 def user(name):
     # respon = make_response("<h3>哈哈</h3>")
