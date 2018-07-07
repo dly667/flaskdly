@@ -10,12 +10,12 @@ navbar %}
                 <span class="icon-bar"></span>
 
             </button>
-            <a class="navbar-brand" href="/">Home</a>
+            <a class="navbar-brand" href="/">首页</a>
         </div>
         <div class="navbar-collapse collapse">
             <ul class="nav navbar-nav">
                 <li>
-                    <a href="/filelist">操作</a>
+                    <a href="/filelist">文件列表</a>
                 </li>
             </ul>
         </div>
@@ -47,7 +47,7 @@ navbar %}
             {% for file in dirs%}
             <tr>
                 <td>{{file}}</td>
-                <td>已完成</td>
+                <td>未完成</td>
                 <td>
                     <a href="/filedetail/{{file}}"><button type="button" class="btn btn-default">更多详情</button></a>
                 </td>

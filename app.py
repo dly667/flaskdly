@@ -1,5 +1,5 @@
 #__*__coding:utf-8__*__
-from flask import Flask, render_template
+from flask import Flask, render_template,send_from_directory
 from flask import request
 from flask import make_response
 from flask import abort
@@ -13,7 +13,15 @@ from wtforms.validators import DataRequired
 from flask_sqlalchemy import SQLAlchemy
 import os, sys
 from werkzeug import secure_filename
-import math
+import math ,json,time
+import gevent
+from flask import copy_current_request_context
+from crawl import Crawl
+from lxml import etree
+
+from concurrent.futures import ThreadPoolExecutor
+
+executor = ThreadPoolExecutor(1)
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 class NameForm(FlaskForm):
@@ -22,9 +30,10 @@ class NameForm(FlaskForm):
 
 
 class UploadForm(FlaskForm):
-    name = StringField('What is your name?', validators=[DataRequired()])
-    file = FileField("导入文件",validators=[DataRequired()])
-    submit = SubmitField("Submit")
+    # name = StringField('What is your name?', validators=[DataRequired()])
+    file = FileField("",validators=[DataRequired()])
+    
+    submit = SubmitField("确定导入")
    
 
 app = Flask(__name__)
@@ -34,7 +43,7 @@ app.config['SECRET_KEY'] = 'hard to guess string'
 app.config['SQLALCHEMY_DATABASE_URI']=\
     'sqlite:///'+os.path.join(basedir,'data.sqlite')
 app.config['SQLALCHEMY_COMMIT_ON_TEARDOWN'] = True
-app.config["SQLALCHEMY_ECHO"] = True
+# app.config["SQLALCHEMY_ECHO"] = True
 db = SQLAlchemy(app)
 
 
@@ -56,12 +65,28 @@ class User(db.Model):
 class PhoneList(db.Model):
     __tablename__ = 'phonelist'
     id = db.Column(db.Integer,primary_key=True)
+    
     filename = db.Column(db.String(64),index=True)
-    phonenumber = db.Column(db.Integer)
+    phonenumber = db.Column(db.String(64))
     # 0表示未抓取，1表示已抓取但未注册，2表示已抓取并且已注册
     status = db.Column(db.Integer)
+    opt_time = db.Column(db.String(64))
     def __repr__(self):
-        return '<User %r> % self.username'
+        return '<PhoneList %r> % self.phonenumber'
+    def to_dict(self):
+        return {c.name: getattr(self, c.name, None) for c in self.__table__.columns}
+class FileState(db.Model):
+    __tablename__ = 'filestate'
+    id = db.Column(db.Integer,primary_key = True)
+    filename = db.Column(db.String(64),index=True)
+    line_number_state = db.Column(db.Integer)
+class Setting(db.Model):
+    __tablename__ = 'setting'
+    id = db.Column(db.Integer,primary_key = True)
+    name = db.Column(db.String(64))
+    value = db.Column(db.String(64))
+    def to_dict(self):
+        return {c.name: getattr(self, c.name, None) for c in self.__table__.columns}
 # db.create_all()
 
 
@@ -91,7 +116,7 @@ def index():
         session['upload_done'] = 0
     form = UploadForm()
     if form.validate_on_submit():
-        filename = secure_filename(form.file.data.filename)
+        filename = form.file.data.filename
         form.file.data.save('uploads/' + filename)
         session['upload_status'] = True
         session['upload_done'] = 1
@@ -112,18 +137,119 @@ def filelist():
     # 输出所有文件和文件夹
     # for file in dirs:
     #     print(file)
-    
+    print(dirs)
+    print(dirs[slice(0,10)],1)
     if cur_p == None:
-        dirs_temp = dirs[slice(1,10)]
+        dirs_temp = dirs[slice(0,10)]
+        
     else:
         dirs_temp = dirs[slice((int(cur_p)-1)*10,(int(cur_p)-1)*10+10)]
-   
+        print(dirs_temp,2)
     return render_template('filelist.html',dirs=dirs_temp,page=list(range(1,(math.ceil((len(dirs)/10+1)))))) 
 
 @app.route('/filedetail/<filename>',methods=["POST","GET"])
 def filedetail(filename):
+    page = request.args.get('p')
 
-    return render_template('filedetail.html',filename=filename)
+    if page == None:
+        page = '1'
+    page = int(page)
+    data = PhoneList.query.filter_by(filename=filename).paginate(page, per_page=10, error_out = False)
+    return render_template('filedetail.html',filename=filename,data=data.items)
+
+@app.route('/crawl',methods=["POST","GET"])
+def crawl():
+    filename = request.form['filename']
+    # 获取用户对象
+    setting = Setting.query.filter_by(name = 'is_crawl').first()
+    # 获取从哪来开始爬
+    cur = PhoneList.query.filter_by(filename=filename).count()
+    # 修改用户信息
+    setting.value = '1'
+
+    # 提交数据库会话
+    db.session.commit()
+    print(cur)
+    print(cur if cur else 1)
+    #后台开始爬取
+    executor.submit(thread_func,filename,cur if cur else 0)
+    return json.dumps({"status":'200',"message":'开始爬取'})
+
+def thread_func(filename,cur):
+    c = Crawl()
+    
+    #读取文件
+    f = open('uploads/'+filename,'r')
+    i = 1
+    while 1:
+        print(cur,i)
+       
+        line = f.readline().strip('\n')
+        if i<=cur:
+            i = i+1
+            continue
+        rs = Setting.query.filter_by(name='is_crawl').first()
+        
+        if rs.value == '0':
+            break
+        if not line:
+            break
+        time.sleep(1)
+        flag = c.crawl(line)
+        
+        if flag:
+            db.session.add(PhoneList(filename=filename,phonenumber=str(line),status="2",opt_time=int(time.time())))
+            db.session.commit()
+        else:
+            db.session.add(PhoneList(filename=filename,phonenumber=str(line),status="1",opt_time=int(time.time())))
+            db.session.commit()
+        pass # do something
+    f.close()
+    
+@app.route('/filedetail/ajax_query',methods=["POST","GET"])
+def ajax_query():
+    type = request.form['type']
+    filename = request.form['filename']
+    
+    if str(type) == 'line_number' and filename !='':
+        count = PhoneList.query.filter_by(filename=filename).count()
+        last_phone_number = PhoneList.query.filter_by(filename=filename).order_by(PhoneList.opt_time.desc()).first()
+        
+        # for item in result:
+        #     print(item.phonenumber)
+    else:
+        pass
+    return json.dumps({"status":'200',"data":{"count":count,"last_phone_number":last_phone_number.phonenumber if last_phone_number else ''},"message":'开始爬取'})
+@app.route('/ajax_download',methods=["POST","GET"])
+def ajax_download():
+
+    all_data = PhoneList.query.filter_by(status='2').order_by(PhoneList.opt_time.desc()).all()
+    f = open("download/export.txt",'w')
+    for data in all_data:
+        f.writelines(data.phonenumber+'\n')
+    f.close()
+    if os.path.isfile(os.path.join('download', "export.txt")):
+        return send_from_directory('download',"export.txt",as_attachment=True)
+    abort(404) 
+
+   
+@app.route('/filedetail/ajax_opt',methods=["POST","GET"])
+def ajax_opt():
+    type = request.form['type']
+    # filename = request.form['filename']
+    
+    if str(type) == 'stop':
+        # 获取用户对象
+        setting = Setting.query.filter_by(name = 'is_crawl').first()
+
+        # 修改用户信息
+        setting.value = '0'
+
+        # 提交数据库会话
+        db.session.commit()
+    else:
+        pass
+    return json.dumps({"status":'200',"data":'',"message":'停止爬虫'})
 @app.route('/user/<name>', methods=["POST", "GET"])
 def user(name):
     # respon = make_response("<h3>哈哈</h3>")
@@ -150,4 +276,4 @@ def page_not_found(e):
 def internal_server_error(e):
     return render_template('500.html')
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0',debug=True)

@@ -1,4 +1,5 @@
-
+<script type="text/javascript" src="http://ajax.microsoft.com/ajax/jquery
+/jquery-1.4.min.js"></script>
 {% extends "bootstrap/base.html" %} {% import "bootstrap/wtf.html" as wtf%} {% block title %} Flasky{% endblock%} {% block
     navbar %}
     <div class="navbar navbar-inverse" role="navigation">
@@ -11,12 +12,12 @@
                     <span class="icon-bar"></span>
     
                 </button>
-                <a class="navbar-brand" href="/">Home</a>
+                <a class="navbar-brand" href="/">首页</a>
             </div>
             <div class="navbar-collapse collapse">
                 <ul class="nav navbar-nav">
                     <li>
-                        <a href="/filelist">操作</a>
+                        <a href="/filelist">文件列表</a>
                     </li>
                 </ul>
             </div>
@@ -34,42 +35,83 @@
         </div>
         {% endfor %}
         <div class="page-header">
-            <h1>Hello,{{name}}!</h1>
+                <h4><div class="txt">当前文件是：<span class="">{{filename}}</span></div></h4>
+                <dl >
+                  
+                  <dd><p><div class="txt">爬到第<span id="count">100</span>条记录，---<span id="last_phone_number"></span></div></p></dd>
+                  <dd><p><button id="kick_off" type="button" class="btn btn-default">开始</button>
+                     <button id="stop" type="button" class="btn btn-default">停止</button></p></dd>
+                  
+                </dl>
         </div>
        
        
        
-      
-       <h4><div class="txt">当前文件是：<span class="">{{filename}}</span></div></h4>
-       <dl >
-         
-         <dd><p><div class="txt">爬到第100条记录，---13777707654</div></p></dd>
-         <dd><p><button type="button" class="btn btn-default">开始</button></p></dd>
-         <dd><p> <button type="button" class="btn btn-default">停止</button></p></dd>
-       </dl>
+      <p>已爬数据列表</p>
+ 
        <ul class="list-group">
-        <li class="list-group-item">18157795211</li>
-        <li class="list-group-item">13689562321</li>
-        <li class="list-group-item">18157795211</li>
-        <li class="list-group-item">
-            <span class="badge">已注册</span>
-            13689562321
-        </li>
-        <li class="list-group-item">13689562321</li>
-        <li class="list-group-item">
-           
-            18157795211
-        </li>
+           {% for item in data %}
+           <li class="list-group-item">{% if item.status == 2%} <span class="badge">已注册</span> {%endif%}{{item.phonenumber}}</li>
+           {%endfor%}
+        
+    
     </ul>
     <ul class="pagination">
-        <li><a href="#">&laquo;</a></li>
-        <li><a href="#">1</a></li>
-        <li><a href="#">2</a></li>
-        <li><a href="#">3</a></li>
-        <li><a href="#">4</a></li>
-        <li><a href="#">5</a></li>
-        <li><a href="#">&raquo;</a></li>
+       
     </ul>
     </div>
-    
+    <script>
+        $("#kick_off").click(function(){
+            $.post("/crawl",
+            {
+              filename:"{{filename}}",
+            },
+            function(data,status){
+                data = JSON.parse(data)
+                if (status == 'success' && data.status == "200")
+                    alert(data.message);
+            });
+          });
+          $("#stop").click(function(){
+            $.post("/filedetail/ajax_opt",
+            {
+              type:"stop",
+            },
+            function(data,status){
+                data = JSON.parse(data)
+                if (status == 'success' && data.status == "200")
+                    alert(data.message);
+            });
+          });
+          //setInterval(function(){
+            $.post("/filedetail/ajax_query",
+            {
+              filename:"{{filename}}",
+              type:'line_number'
+            },
+            function(data,status){
+                data = JSON.parse(data)
+                var p = getUrlParam('p');
+                if (status == 'success' && data.status == "200")
+                    document.getElementById("count").innerText = data.data.count
+                    document.getElementById("last_phone_number").innerText = data.data.last_phone_number
+                    console.log(data.message);
+                    oUl = $(".pagination");
+                    oUl.append(" <li class="+(p <= 1?'disabled':'none')+"><a href=?p="+(p-1)+">&laquo;</a></li>") 
+                    for (i=1;i<(data.data.count/10+1);i++){
+                        
+                        oUl.append(" <li class="+(p == i?'active':'none')+"><a  href=?p="+i+">"+i+"</a></li>") 
+                    }
+                    oUl.append(" <li class="+( p >=parseInt(data.data.count/10+1)?'disabled':'none')+"><a href= "+"?p="+(parseInt(p)+1)+" >&raquo;</a></li>") 
+                  //  oUl.append(" <li class="+( p >=parseInt(data.data.count/10+1)?'disabled':'none')+"><a href= "+ (p <parseInt(data.data.count/10+1))?("?p="+(parseInt(p)+1)):("#")+" >&raquo;</a></li>") 
+                   
+            });
+      //  },3000);
+         //获取url中的参数
+         function getUrlParam(name) {
+            var reg = new RegExp("(^|&)" + name + "=([^&]*)(&|$)"); //构造一个含有目标参数的正则表达式对象
+            var r = window.location.search.substr(1).match(reg);  //匹配目标参数
+            if (r != null) return unescape(r[2]); return null; //返回参数值
+        }
+    </script>
     {%endblock%}
