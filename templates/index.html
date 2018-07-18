@@ -11,12 +11,12 @@
                     <span class="icon-bar"></span>
     
                 </button>
-                <a class="navbar-brand" href="/">Home</a>
+                <a class="navbar-brand" href="/">首页</a>
             </div>
             <div class="navbar-collapse collapse">
                 <ul class="nav navbar-nav">
                     <li>
-                        <a href="/filelist">操作</a>
+                        <a href="/filelist">文件列表</a>
                     </li>
                 </ul>
             </div>
@@ -34,10 +34,11 @@
         </div>
         {% endfor %}
         <div class="page-header">
-            <h1>Hello,{{name}}!</h1>
+                <a href="/ajax_download"><button type="button" class="btn btn-default btn-sm ">导出数据</button></a>
+                {{wtf.quick_form(form)}}
         </div>
     
-        {{wtf.quick_form(form)}}
+        
         {% if upload_done == 1%}
         <script>
             alert("导入成功")
